@@ -9,15 +9,15 @@ Here is a [live demo](https://anvaka.github.io/fieldplay/?dt=0.001&fo=0.998&dp=0
 
 See overlaid animation here: https://twitter.com/anvaka/status/944101777149849600
 
-NOTE: I didn't realize this code would be interesting to community, and I had no intention to share it originally. 
-But since many people have asked about it on Twitter, I'm quickly releasing it as is, so that you can play with it.
+*NOTE:* I didn't realize this code would be interesting to community, and I had no intention to share it originally. 
+But since many people have asked about it on Twitter, I'm quickly releasing it as is, so that you could play with it.
 
 # How to get started with this code?
 
 ## Setup
 Make sure you have [node](https://nodejs.org/) installed, and perform this one-time setup
 
-```
+``` sh
 git clone https://github.com/anvaka/graph-to-vector-field
 cd graph-to-vector-field
 npm install
@@ -27,7 +27,7 @@ npm install
 
 To build a default graph and texture, type in your terminal
 
-```
+``` sh
 npm run build
 ```
 
@@ -35,20 +35,19 @@ This will create a new texture and store it into the `out/` folder. The texture 
 
 ![example](https://gist.githubusercontent.com/anvaka/ebc18e3ffe05b0709a7ae933261fa2e9/raw/239bc655a1269884d271a9418af0d7bd95b906ec/miserables.png)
 
-## Visualizing texture as vector field
+## Visualizing textures as a vector field
 
-Let's use this texture in the [field play](https://anvaka.github.io/fieldplay/?). 
+Let's use our texture in the [field play](https://anvaka.github.io/fieldplay/?). 
 
-You will need to enable a secret UI component, by adding `?showBindings=1` to the query string. Or simply [click here](anvaka.github.io/fieldplay/?showBindings=1)
-
+You will need to enable a secret UI component, by adding `?showBindings=1` to the query string (or simply [click here](anvaka.github.io/fieldplay/?showBindings=1) ).
 
 The `showBindings` is an experimental feature ([discussed here](https://www.reddit.com/r/fieldplay/comments/7jenqz/image_binding_seeking_for_early_feedback/) ).
 It will enable you to add an image, and use it from the vector field code.
 
 ![demo](https://i.imgur.com/A2PkoOK.png)
 
-Now we need an http server with enabled CORS headers. For you convenience, I already included an http-server into
-this module. Type in a new terminal window:
+Now we need an http server with enabled CORS headers. For you convenience, I already included `http-server` into
+this module. Just type in the new terminal window:
 
 ``` sh
 npm start
@@ -79,12 +78,14 @@ vec2 get_velocity(vec2 p) {
 
 That's it. You should see the animated vector field.
 
-## Changing base vector field texture.
+## Changing base vector field texture
 
-I tried to document the code that generate vector field texture. The easiest place to start
-is to change a vector field definition in the javascript file. You can also try your own graphs.
+I tried to [document the code](https://github.com/anvaka/graph-to-vector-field/blob/master/index.js) that generates vector field texture. The easiest place to start
+is to change a [vector field definition](https://github.com/anvaka/graph-to-vector-field/blob/0e750e4aab8c13e0b70b9b8c919d4eadc4c49428/index.js#L42-L54) in the javascript file. 
 
-You can also play with various RBF functions. 
+You can also [try other graphs](https://github.com/anvaka/graph-to-vector-field/blob/0e750e4aab8c13e0b70b9b8c919d4eadc4c49428/index.js#L31-L39), [play with](https://github.com/anvaka/graph-to-vector-field/blob/0e750e4aab8c13e0b70b9b8c919d4eadc4c49428/index.js#L56-L64) various [RBF functions](https://en.wikipedia.org/wiki/Radial_basis_function). 
+
+Remember to run `npm run build` after each modification, so that a new vector field texture is created in the `out/` folder.
 
 *Note:* Current implementation doesn't necessary need to use graphs. Any set of points would do
 just fine. Though, as mentioned above - this was a toy project to learn how to encode graphs.
