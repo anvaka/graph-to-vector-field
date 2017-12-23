@@ -39,7 +39,7 @@ This will create a new texture and store it into the `out/` folder. The texture 
 
 Let's use our texture in the [field play](https://anvaka.github.io/fieldplay/?). 
 
-You will need to enable a secret UI component, by adding `?showBindings=1` to the query string (or simply [click here](anvaka.github.io/fieldplay/?showBindings=1) ).
+You will need to enable a secret UI component, by adding `?showBindings=1` to the query string (or simply [click here](https://anvaka.github.io/fieldplay/?showBindings=1) ).
 
 The `showBindings` is an experimental feature ([discussed here](https://www.reddit.com/r/fieldplay/comments/7jenqz/image_binding_seeking_for_early_feedback/) ).
 It will enable you to add an image, and use it from the vector field code.
