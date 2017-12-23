@@ -93,9 +93,9 @@ I had plans to leverage graph structure in the future, that's why we are dealing
 
 # Thanks!
 
-Thank you for your interest in this project.
+Thank you for your interest in this project!
 
-If you run into any issue - please open a bug here or ping me over [email](anvaka@gmail.com).
+If you run into any issue - please open a bug here or ping me over [email](mailto:anvaka@gmail.com).
 I'd be happy to help.
 
 I wish you to have very happy holidays!
