@@ -16,7 +16,7 @@ var SIGMA = 3;
 var PADDING = 42;
 
 // If set to true, then original graph layout is saved into .layout.png file
-var saveOriginalLayout = true;
+var saveOriginalLayout = false;
 
 // If set to true, then layout image will also include Voronoi decomposition.
 var saveVoronoi = false;
@@ -24,6 +24,11 @@ var saveVoronoi = false;
 // If set, then all four color channels are used for vector field encoding.
 // Otherwise only g and b channels are set.
 var USE_RGBA_ENCODING = true;
+
+// if set, then each graph node is encoded into vector field;
+var RENDER_NODE_FIELD = true;
+// if set, then each graph edge is encoded into vector field;
+var RENDER_EDGE_FIELD = false;
 
 // Bytes per velocity component, translated into possible value range
 var colorRange = (1 << (USE_RGBA_ENCODING ? 2 : 1) * 8) - 1;
@@ -33,11 +38,10 @@ var graph = require('miserables');
 // Alternative graphs:
 
 // var generators = require('ngraph.generators');
-// var graph = generators.grid(10, 10);
+// var graph = generators.complete(6);
 
 // var graph = require('ngraph.graph')();
 // graph.addLink(42, 31);
-
 
 /**
  * Given a pair of points - return a vector associated with the pair. 
@@ -58,9 +62,9 @@ function vectorField(x, y) {
  * 
  * @param {Number} r - vector's length
  */
-function rbf(r) {
+function rbf(r, eps = 0.008) {
   //return 1./(1 + r * r);
-  return Math.exp(-r * r * 0.008);
+  return Math.exp(-r * r * eps);
 }
 
 // Main code:
@@ -83,6 +87,7 @@ function layoutGraph(graph) {
     dragCoeff : 0.09,
     gravity : -1
   });
+
   for(var i = 0; i < LAYOUT_ITERATIONS; ++i) layout.step();
 
   return layout;
@@ -173,7 +178,7 @@ function saveGraphLayoutIntoImage(rect, layout) {
 
   var fileName = OUT_IMAGE_NAME + '.layout.png';
   PImage.encodePNGToStream(scene, fs.createWriteStream(fileName)).then(()=> {
-      console.log('wrote out the png file to ' + fileName);
+    console.log('wrote out the png file to ' + fileName);
   }).catch(e => {
     console.log('failed to save layout image', e);
   });
@@ -226,6 +231,9 @@ function saveVoronoiIfNeeded(ctx, layout, rect) {
   });
 }
 
+/**
+ * For each pixel computes cumulative velocity vector.
+ */
 function accumulateVelocities(rect, layout) {
   var velocity = [];
   var width = rect.x2 - rect.x1;
@@ -296,19 +304,74 @@ function clamp(x, min, max) {
 function getVelocity(x, y, layout) {
   var v = {x: 0, y: 0};
 
-  layout.forEachBody(body => {
-    var pos = body.pos;
-    var px = x - pos.x;
-    var py = y - pos.y;
-    var d = getLength(px, py);
-    if (d < 1e-5) return;
+  if (RENDER_NODE_FIELD) {
+    layout.forEachBody(body => {
+      var pos = body.pos;
+      var px = x - pos.x;
+      var py = y - pos.y;
+      var d = getLength(px, py);
+      if (d < 1e-5) return;
 
-    var vf = vectorField(px, py);
-    v.x += vf.x * rbf(d);
-    v.y += vf.y * rbf(d);
-  });
+      var vf = vectorField(px, py);
+      v.x += vf.x * rbf(d, 0.09);
+      v.y += vf.y * rbf(d, 0.09);
+    });
+  }
+
+  // also add links to the vector field
+
+  if (RENDER_EDGE_FIELD) {
+    graph.forEachLink(l => {
+      var from = layout.getNodePosition(l.fromId);
+      var to = layout.getNodePosition(l.toId);
+
+      var vf = {
+        x: to.x - from.x,
+        y: to.y - from.y
+      };
+
+      var l = Math.sqrt(vf.x * vf.x + vf.y * vf.y);
+      if (l < 1e-5) return;
+
+      vf.x /= l; vf.y /= l;
+      var linkPadding = 0;//l * 0.15;
+      var d = pointToSegmentDistance(x, y, {
+        x: from.x + vf.x * linkPadding,
+        y: from.y + vf.y * linkPadding
+      }, {
+        x: to.x - vf.x * linkPadding,
+        y: to.y - vf.y * linkPadding
+      });
+      var angle = Math.atan2(vf.y, vf.x);
+      v.x += Math.cos(angle)*rbf(d, 0.4);
+      v.y += Math.sin(angle)*rbf(d, 0.4);
+    });
+  }
 
   return v;
+}
+
+function pointToSegmentDistance(px, py, start, end) {
+  var vx = end.x - start.x;
+  var vy = end.y - start.y;
+
+  var wx  = px - start.x;
+  var wy  = py - start.y;
+
+  var c1 = wx * vx + wy * vy;
+  if (c1 <= 0) {
+    return Math.sqrt((start.x - px) * (start.x - px) + (start.y - py) * (start.y - py));
+  }
+
+  var c2 = vx * vx + vy * vy;
+  if (c2 <= c1) {
+    return Math.sqrt((end.x - px) * (end.x - px) + (end.y - py) * (end.y - py));
+  }
+  var b = c1/c2;
+  var pbx = start.x + b * vx;
+  var pby = start.y + b * vy;
+
+  return Math.sqrt((pbx - px) * (pbx - px) + (pby - py) * (pby - py));
 }
 
 function getLength(x, y) {
