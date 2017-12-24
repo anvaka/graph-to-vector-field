@@ -59,8 +59,8 @@ function vectorField(x, y) {
  * @param {Number} r - vector's length
  */
 function rbf(r) {
-  // return 1./(1 + r * r);
-  return Math.exp(-r * r * 0.01);
+  //return 1./(1 + r * r);
+  return Math.exp(-r * r * 0.008);
 }
 
 // Main code:
@@ -157,6 +157,14 @@ function saveGraphLayoutIntoImage(rect, layout) {
 
   //clearRectangle(ctx, width, height);
   ctx.fillStyle = 'rgba(0, 200, 230, 1)';
+  graph.forEachLink(l => {
+    var from = layout.getNodePosition(l.fromId);
+    var to = layout.getNodePosition(l.toId);
+    ctx.beginPath()
+    ctx.moveTo(from.x - rect.x1, from.y - rect.y1);
+    ctx.lineTo(to.x - rect.x1, to.y - rect.y1);
+    ctx.stroke();
+  })
   layout.forEachBody(body => {
     ctx.fillRect(body.pos.x - rect.x1 - 5, body.pos.y - rect.y1 - 5, 10, 10);
   });
