@@ -12,6 +12,9 @@ var OUT_IMAGE_NAME = path.join('out', (new Date()).toISOString().replace(/:/g, '
 // of vector field values, and clamp any value beyond this many sigmas.
 var SIGMA = 3;
 
+// if set to true, then sigma clamping (see above) will be used.
+var CLAMP_SIGMA = true;
+
 // How many pixels shall we reserve for texture edges padding?
 var PADDING = 42;
 
@@ -41,7 +44,7 @@ var graph = require('miserables');
 // var graph = generators.complete(6);
 
 // var graph = require('ngraph.graph')();
-// graph.addLink(42, 31);
+// graph.addNode(42, 31);
 
 /**
  * Given a pair of points - return a vector associated with the pair. 
@@ -281,9 +284,11 @@ function accumulateVelocities(rect, layout) {
   console.log(`X: [${minX}, ${maxX}], Y: [${minY}, ${maxY}]; Mean: (${meanX}, ${meanY}); Sigma: (${sigmaX}, ${sigmaY})`);
 
   // clamp entries:
-  minX = meanX - SIGMA * sigmaX; maxX = meanX + SIGMA * sigmaX;
-  minY = meanY - SIGMA * sigmaY; maxY = meanY + SIGMA * sigmaY;
-  console.log(`Transform min/max: X: [${minX}, ${maxX}], Y: [${minY}, ${maxY}];`);
+  if (CLAMP_SIGMA) {
+    minX = meanX - SIGMA * sigmaX; maxX = meanX + SIGMA * sigmaX;
+    minY = meanY - SIGMA * sigmaY; maxY = meanY + SIGMA * sigmaY;
+    console.log(`Transform min/max: X: [${minX}, ${maxX}], Y: [${minY}, ${maxY}];`);
+  }
 
   velocity.forEach(column => {
     column.forEach(pixelVelocity => {
@@ -305,16 +310,22 @@ function getVelocity(x, y, layout) {
   var v = {x: 0, y: 0};
 
   if (RENDER_NODE_FIELD) {
-    layout.forEachBody(body => {
-      var pos = body.pos;
+    graph.forEachNode(node => {
+      var pos = layout.getNodePosition(node.id);
       var px = x - pos.x;
       var py = y - pos.y;
       var d = getLength(px, py);
       if (d < 1e-5) return;
 
       var vf = vectorField(px, py);
-      v.x += vf.x * rbf(d, 0.09);
-      v.y += vf.y * rbf(d, 0.09);
+
+      // We could also weight by number of links:
+      // var links = graph.getLinks(node.id)
+      // var linksFieldWeight = ((links && links.length || 0) + 1) * 0.4;
+      // v.x += vf.x * rbf(d, 0.009 / (linksFieldWeight));
+      // v.y += vf.y * rbf(d, 0.009 / (linksFieldWeight));
+      v.x += vf.x * rbf(d, 0.009);
+      v.y += vf.y * rbf(d, 0.009);
     });
   }
 
