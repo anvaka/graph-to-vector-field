@@ -12,6 +12,16 @@ class Vector {
     return new Vector(this.x * scalar, this.y * scalar);
   }
 
+  length() {
+    return Math.sqrt(this.x * this.x + this.y * this.y);
+  }
+
+  normalize() {
+    var l = this.length();
+    this.x /= l;
+    this.y /= l;
+  }
+
   distanceTo(other) {
     var dx = other.x - this.x;
     var dy = other.y - this.y;
