@@ -55,8 +55,8 @@ var graph = require('miserables');
  */
 function vectorField(x, y) {
   return {
-    x: -y,
-    y: x
+    x: x,
+    y: y
   }
 }
 
@@ -66,6 +66,7 @@ function vectorField(x, y) {
  * @param {Number} r - vector's length
  */
 function rbf(r, eps = 0.008) {
+  return 1./(1 + Math.abs(r));
   //return 1./(1 + r * r);
   return Math.exp(-r * r * eps);
 }
@@ -185,15 +186,6 @@ function saveGraphLayoutIntoImage(rect, layout) {
   }).catch(e => {
     console.log('failed to save layout image', e);
   });
-}
-
-function clearRectangle(ctx, width, height) {
-  var imgData = ctx.getImageData();
-  for (var x = 0; x < width; ++x) {
-    for (var y = 0; y < height; ++y) {
-      imgData.setPixelRGBA_i(x, y, 0, 0, 0, 0);
-    }
-  } 
 }
 
 function saveVoronoiIfNeeded(ctx, layout, rect) {
