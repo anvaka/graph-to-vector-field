@@ -53,10 +53,6 @@ function drawTrace(ctx, trace) {
 }
 
 function getVelocity(p) {
-  var v = new Vector(p.x, p.y);
-  if (v.length() === 0) return;
-  v.normalize();
-  return v;
   var v1 = new Vector(p.x - 30, p.y);
   var v2 = new Vector(p.x + 30, p.y);
   var l1 = v1.length();
