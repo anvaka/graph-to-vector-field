@@ -1,9 +1,18 @@
 module.exports = function createPathMemory() {
   var seenCount = new Map();
+  var maxSeenValue = 0;
 
   return {
     rememberPath,
-    getSeenCount
+    getSeenCount,
+    forEachEdge,
+    getMaxSeen() {
+      return maxSeenValue;
+    }
+  }
+
+  function forEachEdge(cb) {
+    seenCount.forEach(cb);
   }
 
   function rememberPath(path) {
@@ -22,10 +31,12 @@ module.exports = function createPathMemory() {
 
   function rememberEdge(from, to) {
     var key = getEdgeKey(from, to);
-    seenCount.set(key, (seenCount.get(key) || 0) + 1);
+    var seenValue = (seenCount.get(key) || 0) + 1;
+    if (seenValue > maxSeenValue) maxSeenValue = seenValue;
+    seenCount.set(key, seenValue);
   }
 
   function getEdgeKey(from, to) {
-    return from.id < to.id ? from.id + ',' + to.id : to.id + ',' + from.id;
+    return from.id < to.id ? from.id + ';' + to.id : to.id + ';' + from.id;
   }
 }
