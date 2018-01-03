@@ -1,7 +1,10 @@
 var graph = require('miserables');
 // var graph = require('ngraph.generators').grid(4, 4);
-//var graph = require('./getSocialGraph')();
+// var graph = require('./getSocialGraph')();
 
+var PImage = require('pureimage');
+var fs = require('fs');
+var path = require('path');
 var createGraph = require('ngraph.graph');
 
 var DRAW_NODES = true;
@@ -18,14 +21,13 @@ var BLUE_THEME = {
 
 var currentTheme = BLUE_THEME;// MAP_THEME;
 
-var PImage = require('pureimage');
-var fs = require('fs');
-var path = require('path');
 var OUT_IMAGE_NAME = (new Date()).toISOString().replace(/:/g, '.');
-var textureName = 'routes' + OUT_IMAGE_NAME + '.png';
+var textureName = path.join('out', 'routes' + OUT_IMAGE_NAME + '.png');
+var routeFileName = path.join('out', 'model_' + OUT_IMAGE_NAME + '.json');
+
 var pathMemory = require('./pathMemory')();
 
-var cellWidth = 1;
+var cellWidth = 4;
 var LAYOUT_ITERATIONS = 1500;
 // Main code:
 var layout = layoutGraph(graph);
@@ -39,8 +41,10 @@ bounds.y2 += height * .05;
 width += width * 0.1;
 height += height * 0.1;
 console.log(bounds);
+
 var scene = PImage.make(width, height);
 var ctx = scene.getContext('2d');
+
 ctx.imageSmoothingEnabled = false;
 ctx.fillStyle = currentTheme.background;
 ctx.fillRect(0,0,width,height);
@@ -75,10 +79,13 @@ var pathFinder = path.aStar(gridGraph, {
  }
 });
 
-routeEdges(layout, graph);
+var routeMap = routeEdges(layout, graph);
+
+fs.writeFileSync(routeFileName, JSON.stringify(routeMap), 'utf8');
 
 PImage.encodePNGToStream(scene, fs.createWriteStream(textureName)).then(()=> {
-    console.log('wrote out the png file to ' + textureName);
+    console.log('Wrote out the png file to ' + textureName);
+    console.log('Model file saved to ' + routeFileName);
 }).catch(e => {
     console.log('there was an error writing', e);
 });
@@ -129,8 +136,8 @@ function makeGridGraph(layout) {
     var costX = (fromNode.data.vx + toNode.data.vx)/2;
     var costY = (fromNode.data.vy + toNode.data.vy)/2;
 
-    // var costX = maxV - Math.abs(fromNode.data.vx) - Math.abs(toNode.data.vx);
-    // var costY = maxV - Math.abs(fromNode.data.vy) - Math.abs(toNode.data.vy);
+   // var costX = maxV - Math.abs(fromNode.data.vx) - Math.abs(toNode.data.vx);
+   // var costY = maxV - Math.abs(fromNode.data.vy) - Math.abs(toNode.data.vy);
     var cost = Math.sqrt(costX * costX + costY*costY);
     if (cost > largestCost) largestCost = cost;
     return gridGraph.addLink(from, to, {cost});
@@ -164,16 +171,23 @@ function routeEdges(layout, graph) {
     pathMemory.rememberPath(path, link.fromId, link.toId);
   });
 
+  return saveRoutes();
+}
+
+function saveRoutes() {
+  var edges = [], nodes = [];
   pathMemory.forEachEdge((v, k) => {
     var edgeParts = k.split(';');
     var from = edgeParts[0].split(',').map(v => parseInt(v, 10));
     var to = edgeParts[1].split(',').map(v => parseInt(v, 10));
     ctx.beginPath();
     ctx.strokeStyle = currentTheme.linkColor;
-    ctx.lineWidth = Math.round(Math.pow(Math.round(4 * v/pathMemory.getMaxSeen()), 1.4)) + 1;
+    var lineWidth = Math.round(Math.pow(Math.round(4 * v/pathMemory.getMaxSeen()), 1.4)) + 1;
+    ctx.lineWidth = lineWidth;
 
     ctx.moveTo(from[0] * cellWidth, from[1] * cellWidth);
     ctx.lineTo(to[0] * cellWidth, to[1] * cellWidth);
+    edges.push({ from, to, lineWidth })
     ctx.stroke();
   });
 
@@ -182,19 +196,21 @@ function routeEdges(layout, graph) {
     graph.forEachNode(node => {
       var pos = layout.getNodePosition(node.id);
       var rw = 8; var rh = 8;
-      ctx.fillRect(pos.x - bounds.x1 - rw/2, pos.y - bounds.y1 - rh /2, rw, rh);
+      var x = pos.x - bounds.x1;
+      var y = pos.y - bounds.y1;
+      ctx.fillRect(x - rw/2, y - rh/2, rw, rh);
+
+      nodes.push({x: Math.round(x), y: Math.round(y)});
     });
   }
+
+  return {nodes, edges}
 }
 
 function drawPath(path) {
-  if (path.length < 8) {
-    console.log('what')
-    return;
-  }
   var pt = getPos(path[1]);
   ctx.beginPath();
-  ctx.strokeStyle = '#78FFFF'
+  ctx.strokeStyle = currentTheme.linkColor
   ctx.moveTo(pt.x, pt.y)
   for (var i = 4; i < path.length - 4; ++i) {
     var to = getPos(path[i]);
@@ -263,7 +279,7 @@ function getVelocity(x, y, layout) {
   var py = y * Math.cos(a) + x * Math.sin(a);
   var v = Math.cos(px/6) * Math.cos(py/6) ;
 
-  for (var i = 0; i < 4; ++i) {
+  for (var i = 0; i < 40; ++i) {
     var sn = sortedNodesByDegree[i];
     var pos = layout.getNodePosition(sn.id);
     v += field(x - pos.x, y - pos.y, sn.linksCount);
