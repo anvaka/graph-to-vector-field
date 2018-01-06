@@ -24,7 +24,7 @@ function readFieldFromImage(path, done) {
       var g = imgData.data[i + 1];
       var b = imgData.data[i + 2];
       var color = chroma(r, g, b).hsl();
-      var v = 100 * (color[2]);
+      var v = (1 - color[2]);
       // console.log(x, y, v);
       return {x: v, y: v};
     }
