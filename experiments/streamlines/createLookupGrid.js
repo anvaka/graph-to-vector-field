@@ -10,13 +10,14 @@ class Cell {
     this.children.push(point);
   }
 
-  isTaken(x, y, dist) {
+  isTaken(x, y, checkCallback) {
     if (!this.children) return false;
 
     for(var i = 0; i < this.children.length; ++i) {
       var p = this.children[i];
       var dx = p.x - x, dy = p.y - y;
-      if (Math.sqrt(dx * dx + dy * dy) < dist) return true;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (checkCallback(dist, p)) return true;
     }
 
     return false;
@@ -24,7 +25,7 @@ class Cell {
 }
 
 function createLookupGrid(bbox, dSep) {
-  var dTest = dSep * 0.5;
+  var dTest = dSep * 0.5; // TODO: move out
   var cellsCount = Math.ceil(bbox.size / dSep);
 
   var cells = buildCells();
@@ -41,7 +42,7 @@ function createLookupGrid(bbox, dSep) {
     getCellByCoordinates(x, y).occupy(point);
   }
 
-  function isTaken(x, y) {
+  function isTaken(x, y, checkCallback) {
     var cx = gridX(x);
     var cy = gridY(y);
     for (var col = -1; col < 2; ++col) {
@@ -52,7 +53,7 @@ function createLookupGrid(bbox, dSep) {
         var currentCellY = cy + row;
         if (currentCellY < 0 || currentCellY >= cellsCount) continue;
 
-        if (cells[currentCellX][currentCellY].isTaken(x, y, dTest)) return true;
+        if (cells[currentCellX][currentCellY].isTaken(x, y, checkCallback)) return true;
       }
     }
 
@@ -61,10 +62,10 @@ function createLookupGrid(bbox, dSep) {
 
   function buildCells() {
     var result = [];
-    for (var y = 0; y < cellsCount; ++y) {
+    for (var y = 0; y < cellsCount + 1; ++y) {
       var col = [];
       result.push(col);
-      for (var x = 0; x < cellsCount; ++x) {
+      for (var x = 0; x < cellsCount + 1; ++x) {
         col.push(new Cell());
       }
     }

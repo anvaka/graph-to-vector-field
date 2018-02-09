@@ -32,8 +32,9 @@ var routeFileName = path.join('out', 'model_' + OUT_IMAGE_NAME + '.json');
 
 var CELL_WIDTH = 1;
 var LAYOUT_ITERATIONS = 1500;
+var largestCost = 0;
 
-// readFieldFromImage('/Users/anvaka/projects/graph-to-vector-field/data/city3.png', (textureApi) => {
+// readFieldFromImage('/Users/anvaka/projects/graph-to-vector-field/data/head.png', (textureApi) => {
 //   textureVelocity = textureApi;
 //   start();
 // });
@@ -74,7 +75,6 @@ function start() {
   var gridGraph = makeGridGraph(layout);
   console.log(gridGraph.getLinksCount())
   var path = require('ngraph.path');
-  var largestCost = 1;
 
   var pathFinder = path.aStar(gridGraph, {
     distance(fromNode, toNode, link) {
@@ -119,8 +119,8 @@ function start() {
         if (vLength > maxV) maxV = vLength;
 
         gridGraph.addNode(getGridNodeKey(col, row), {
-          vx: Math.abs(v.x),
-          vy: Math.abs(v.y),
+          vx: (v.x),
+          vy: (v.y),
           x: x,
           y: y
         });
@@ -140,17 +140,24 @@ function start() {
     return gridGraph;
 
     function connect(from, to) {
-      var fromNode = gridGraph.getNode(from);
-      var toNode = gridGraph.getNode(to);
+      var fromNode = gridGraph.getNode(from).data;
+      var toNode = gridGraph.getNode(to).data;
 
-      // var costX = 1 - (fromNode.data.vx + toNode.data.vx)/(maxV * 2);
-      // var costY = 1 - (fromNode.data.vy + toNode.data.vy)/(maxV * 2);
-      var costX = (fromNode.data.vx + toNode.data.vx)/(2);
-      var costY = (fromNode.data.vy + toNode.data.vy)/(2);
+      // var costX = 1 - (fromNode.vx + toNode.vx)/(maxV * 2);
+      // var costY = 1 - (fromNode.vy + toNode.vy)/(maxV * 2);
 
-      // var costX = 2*maxV - Math.abs(fromNode.data.vx) - Math.abs(toNode.data.vx);
-      // var costY = 2*maxV - Math.abs(fromNode.data.vy) - Math.abs(toNode.data.vy);
+      var costX = (fromNode.vx + toNode.vx)/2;
+      var costY = (fromNode.vy + toNode.vy)/2;
       var cost = Math.sqrt(costX * costX + costY*costY);
+
+      var velocityVector = Math.atan2(costY, costX);
+      if (velocityVector < 0) velocityVector = Math.PI * 2 + velocityVector;
+      var positionVector = Math.atan2(fromNode.y - toNode.y, fromNode.x - toNode.x)
+      if (positionVector < 0) positionVector = Math.PI * 2 + positionVector;
+      cost = Math.abs(positionVector - velocityVector)*Math.sqrt(costX * costX + costY * costY);
+
+      // var costX = 2*maxV - Math.abs(fromNode.vx) - Math.abs(toNode.vx);
+      // var costY = 2*maxV - Math.abs(fromNode.vy) - Math.abs(toNode.vy);
       if (cost > largestCost) largestCost = cost;
       return gridGraph.addLink(from, to, {cost});
     }
@@ -291,6 +298,7 @@ function start() {
       var dy = (y - bounds.y1)/height;
       return textureVelocity.get(dx, dy);
     }
+    return {x: -y, y: x};
 
     var a = Math.PI/3.;
     var px = x * Math.cos(a) - y * Math.sin(a);
