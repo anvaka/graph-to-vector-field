@@ -73,25 +73,26 @@ function start() {
   console.log(sortedNodesByDegree[0])
 
   var gridGraph = makeGridGraph(layout);
+  drawVelocityHeatmap(gridGraph);
   console.log(gridGraph.getLinksCount())
-  var path = require('ngraph.path');
+  //return;
+  var npath = require('ngraph.path');
 
-  var pathFinder = path.aStar(gridGraph, {
+  var pathFinder = npath.aStar(gridGraph, {
     distance(fromNode, toNode, link) {
       var seenCount = pathMemory.getSeenCount(fromNode, toNode);
       let lengthReducer = seenCount === 0 ? 1 : (Math.exp(-0.8 * seenCount + Math.log(1 - 0.5)) + 0.5)
       return link.data.cost * lengthReducer;
     },
-  heuristic(from, to) {
-    let fromPos = from.data;
-    let toPos = to.data;
-    var r = largestCost * gridGraph.getLinksCount();
-    return path.aStar.l2(fromPos, toPos) * Math.exp(-0.001 * r * r) ;
-  }
+    heuristic(from, to) {
+      let fromPos = from.data;
+      let toPos = to.data;
+      var r = largestCost * gridGraph.getLinksCount();
+      return npath.aStar.l2(fromPos, toPos) * Math.exp(-0.001 * r * r) ;
+    }
   });
 
   var routeMap = routeEdges(layout, graph);
-
   fs.writeFileSync(routeFileName, JSON.stringify(routeMap), 'utf8');
 
   PImage.encodePNGToStream(scene, fs.createWriteStream(textureName)).then(()=> {
@@ -101,6 +102,35 @@ function start() {
       console.log('there was an error writing', e);
   });
 
+  function drawVelocityHeatmap(graph) {
+    var scene = PImage.make(width, height);
+    var ctx = scene.getContext('2d');
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = currentTheme.background;
+    ctx.fillRect(0,0,width,height);
+
+    graph.forEachLink(link => {
+      var from = getPos(graph.getNode(link.fromId));
+      var to = getPos(graph.getNode(link.toId));
+      drawSegment(from, to, link.data.cost/largestCost);
+    });
+
+    var textureName = path.join('out', 'velocity' + OUT_IMAGE_NAME + '.png');
+    PImage.encodePNGToStream(scene, fs.createWriteStream(textureName)).then(()=> {
+        console.log('Wrote heatmap png file to ' + textureName);
+    }).catch(e => {
+        console.log('there was an error writing', e);
+    });
+
+    function drawSegment(from, to, strength) {
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(${Math.round(strength * 255)}, 0, 0, 1)`;
+      ctx.moveTo(from.x, from.y)
+      ctx.lineTo(to.x, to.y)
+      ctx.stroke();
+    }
+  }
 
   function makeGridGraph(layout) {
     var gridGraph = createGraph();
@@ -108,6 +138,10 @@ function start() {
     var cellsX = width/CELL_WIDTH;
     var cellsY = height/CELL_WIDTH;
 
+    var maxVx = Number.NEGATIVE_INFINITY;
+    var maxVy = Number.NEGATIVE_INFINITY;
+    var minVx = Number.POSITIVE_INFINITY;
+    var minVy = Number.POSITIVE_INFINITY;
     var maxV = 0;
     for (var col = 0; col < cellsX; col += 1) {
       for (var row = 0; row < cellsY; row += 1) {
@@ -115,6 +149,9 @@ function start() {
         var y = (row * CELL_WIDTH + bounds.y1);
 
         var v = getVelocity(x, y, layout);
+        if (minVx > v.x) minVx = v.x; if (maxVx < v.x) maxVx = v.x;
+        if (minVy > v.y) minVy = v.y; if (maxVy < v.y) maxVy = v.y;
+
         var vLength = length(v.x, v.y);
         if (vLength > maxV) maxV = vLength;
 
@@ -143,21 +180,22 @@ function start() {
       var fromNode = gridGraph.getNode(from).data;
       var toNode = gridGraph.getNode(to).data;
 
-      // var costX = 1 - (fromNode.vx + toNode.vx)/(maxV * 2);
-      // var costY = 1 - (fromNode.vy + toNode.vy)/(maxV * 2);
+      var costX = (fromNode.vx + toNode.vx)/(maxV * 2);
+      var costY = (fromNode.vy + toNode.vy)/(maxV * 2);
 
-      var costX = (fromNode.vx + toNode.vx)/2;
-      var costY = (fromNode.vy + toNode.vy)/2;
+      // var costX = (fromNode.vx + toNode.vx)/2;
+      // var costY = (fromNode.vy + toNode.vy)/2;
       var cost = Math.sqrt(costX * costX + costY*costY);
 
-      var velocityVector = Math.atan2(costY, costX);
-      if (velocityVector < 0) velocityVector = Math.PI * 2 + velocityVector;
-      var positionVector = Math.atan2(fromNode.y - toNode.y, fromNode.x - toNode.x)
-      if (positionVector < 0) positionVector = Math.PI * 2 + positionVector;
-      cost = Math.abs(positionVector - velocityVector)*Math.sqrt(costX * costX + costY * costY);
+      // var velocityVector = Math.atan2(costY, costX);
+      // if (velocityVector < 0) velocityVector = Math.PI * 2 + velocityVector;
+      // var positionVector = Math.atan2(fromNode.y - toNode.y, fromNode.x - toNode.x)
+      // if (positionVector < 0) positionVector = Math.PI * 2 + positionVector;
+      // cost = Math.abs(positionVector - velocityVector)*Math.sqrt(costX * costX + costY * costY);
 
       // var costX = 2*maxV - Math.abs(fromNode.vx) - Math.abs(toNode.vx);
       // var costY = 2*maxV - Math.abs(fromNode.vy) - Math.abs(toNode.vy);
+      // var cost = Math.sqrt(costX * costX + costY*costY);
       if (cost > largestCost) largestCost = cost;
       return gridGraph.addLink(from, to, {cost});
     }
@@ -179,7 +217,7 @@ function start() {
       var gridFrom = getGridNode(fromPos);
       var gridTo = getGridNode(toPos);
 
-      let path = pathFinder.find(gridFrom, gridTo);
+      let npath = pathFinder.find(gridFrom, gridTo);
       // drawPath(path);
       // This would draw original edges
       // drawPath([{
@@ -187,7 +225,7 @@ function start() {
       // }, {
       //   data: toPos
       // }]);
-      pathMemory.rememberPath(path, link.fromId, link.toId);
+      pathMemory.rememberPath(npath, link.fromId, link.toId);
     });
 
     return saveRoutes();
@@ -298,11 +336,8 @@ function start() {
       var dy = (y - bounds.y1)/height;
       return textureVelocity.get(dx, dy);
     }
-    return {x: -y, y: x};
+    //return {x: -y, y: x};
 
-    var a = Math.PI/3.;
-    var px = x * Math.cos(a) - y * Math.sin(a);
-    var py = y * Math.cos(a) + x * Math.sin(a);
     var v = 0;//Math.cos(px/6) * Math.cos(py/6) ;
 
     for (var i = 0; i < 40; ++i) {
