@@ -8,6 +8,7 @@ var createGraph = require('ngraph.graph');
 var pathMemory = require('./pathMemory')();
 
 //var graph = require('./getSocialGraph')();
+//var graph = require('ngraph.fromdot')(fs.readFileSync('./data/twit/graph.dot', 'utf8'));
 
 var DRAW_NODES = true;
 
@@ -34,7 +35,7 @@ var CELL_WIDTH = 1;
 var LAYOUT_ITERATIONS = 1500;
 var largestCost = 0;
 
-// readFieldFromImage('/Users/anvaka/projects/graph-to-vector-field/data/head.png', (textureApi) => {
+// readFieldFromImage('/Users/anvaka/projects/graph-to-vector-field/data/city2.png', (textureApi) => {
 //   textureVelocity = textureApi;
 //   start();
 // });
@@ -225,7 +226,9 @@ function start() {
       // }, {
       //   data: toPos
       // }]);
-      pathMemory.rememberPath(npath, link.fromId, link.toId);
+
+      // Path is inverted, thus we put toId first, and fromId last:
+      pathMemory.rememberPath(npath, link.toId, link.fromId);
     });
 
     return saveRoutes();
@@ -233,13 +236,13 @@ function start() {
 
   function saveRoutes() {
     var edges = [], nodes = [];
-    pathMemory.forEachEdge((v, k) => {
-      var edgeParts = k.split(';');
-      var from = edgeParts[0].split(',').map(v => parseInt(v, 10));
-      var to = edgeParts[1].split(',').map(v => parseInt(v, 10));
+    pathMemory.simplify();
+    pathMemory.forEachEdge(v => {
+      var from = v.fromId.split(',').map(v => parseInt(v, 10));
+      var to = v.toId.split(',').map(v => parseInt(v, 10));
       ctx.beginPath();
       ctx.strokeStyle = currentTheme.linkColor;
-      var lineWidth = Math.round(Math.pow(Math.round(4 * v/pathMemory.getMaxSeen()), 1.4)) + 1;
+      var lineWidth = Math.round(Math.pow(Math.round(4 * v.data/pathMemory.getMaxSeen()), 1.4)) + 1;
       ctx.lineWidth = lineWidth;
 
       ctx.moveTo(from[0] * CELL_WIDTH, from[1] * CELL_WIDTH);
@@ -338,13 +341,25 @@ function start() {
     }
     //return {x: -y, y: x};
 
-    var v = 0;//Math.cos(px/6) * Math.cos(py/6) ;
+    var v = getNearestNodeDistance(x, y, layout);
 
-    for (var i = 0; i < 40; ++i) {
-      var sn = sortedNodesByDegree[i];
-      var pos = layout.getNodePosition(sn.id);
-      v += field(x - pos.x, y - pos.y, sn.linksCount);
-    }
+    // for (var i = 0; i < 40; ++i) {
+    //   var sn = sortedNodesByDegree[i];
+    //   var pos = layout.getNodePosition(sn.id);
+    //   v += field(x - pos.x, y - pos.y, sn.linksCount);
+    // }
     return {x: v, y: v};
+  }
+
+  function getNearestNodeDistance(x, y, layout) {
+    var minL = Number.POSITIVE_INFINITY;
+    layout.forEachBody(body => {
+      var distToBody = length(body.pos.x - x, body.pos.y - y);
+      if (distToBody < minL) {
+        minL = distToBody;
+      }
+    });
+
+    return minL;
   }
 }

@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "http-server": "^0.10.0",
+    "ngraph.fromdot": "^0.2.0",
     "tap": "^11.0.1"
   }
 }
