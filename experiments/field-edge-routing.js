@@ -1,4 +1,4 @@
-var graph = require('miserables');
+//var graph = require('miserables');
 //var graph = require('ngraph.generators').grid(8, 8);
 var readFieldFromImage = require('./readFieldFromImage');
 var PImage = require('pureimage');
@@ -7,10 +7,10 @@ var path = require('path');
 var createGraph = require('ngraph.graph');
 var pathMemory = require('./pathMemory')();
 
-//var graph = require('./getSocialGraph')();
+var graph = require('./getSocialGraph')();
 //var graph = require('ngraph.fromdot')(fs.readFileSync('./data/twit/graph.dot', 'utf8'));
 
-var DRAW_NODES = true;
+var DRAW_NODES = false;
 
 var MAP_THEME = {
   background: '#F0EDE5',
@@ -253,18 +253,48 @@ function start() {
 
     if (DRAW_NODES) {
       ctx.fillStyle = currentTheme.nodeColor;
-      graph.forEachNode(node => {
-        var pos = layout.getNodePosition(node.id);
+      pathMemory.moveRootsOut();
+      pathMemory.forEachRoot(root => {
+        var pos = root.pos;
         var rw = 8; var rh = 8;
-        var x = pos.x - bounds.x1;
-        var y = pos.y - bounds.y1;
-        ctx.fillRect(x - rw/2, y - rh/2, rw, rh);
+        var x = pos.x * CELL_WIDTH;
+        var y = pos.y * CELL_WIDTH;
+        var center = { x: x, y: y };
+        var a = 0; //pos.angle;
+        var leftTop = rotate({x: x - rw/2, y: y - rh/2 }, center, a);
+        var leftBottom = rotate({x: x - rw/2, y: y + rh/2}, center, a)
+        var topRight = rotate({x: x + rw/2,y: y - rh/2}, center, a);
+        var bottomRight = rotate({x: x + rw/2,y: y + rh/2}, center, a);
 
-        nodes.push({x: Math.round(x), y: Math.round(y)});
+        ctx.beginPath();
+        ctx.moveTo(leftTop.x, leftTop.y);
+        ctx.lineTo(topRight.x, topRight.y);
+        ctx.lineTo(bottomRight.x, bottomRight.y);
+        ctx.lineTo(leftBottom.x, leftBottom.y);
+        ctx.lineTo(leftTop.x, leftTop.y);
+
+        ctx.stroke();
       });
+
+      // graph.forEachNode(node => {
+      //   var pos = layout.getNodePosition(node.id);
+      //   var rw = 8; var rh = 8;
+      //   var x = pos.x - bounds.x1;
+      //   var y = pos.y - bounds.y1;
+      //   ctx.fillRect(x - rw/2, y - rh/2, rw, rh);
+
+      //   nodes.push({x: Math.round(x), y: Math.round(y)});
+      // });
     }
 
     return {nodes, edges}
+
+    function rotate(p, c, angle) {
+      return {
+        x: (p.x - c.x) * Math.cos(angle) - (p.y - c.y) * Math.sin(angle) + c.x,
+        y: (p.x - c.x) * Math.sin(angle) + (p.y - c.y) * Math.cos(angle) + c.y,
+      }
+    }
   }
 
   function drawPath(path) {
