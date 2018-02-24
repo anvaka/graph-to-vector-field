@@ -1,16 +1,16 @@
 //var graph = require('miserables');
-//var graph = require('ngraph.generators').grid(8, 8);
+//var graph = require('ngraph.generators').grid(4, 8);
 var readFieldFromImage = require('./readFieldFromImage');
-var PImage = require('pureimage');
 var fs = require('fs');
 var path = require('path');
 var createGraph = require('ngraph.graph');
 var pathMemory = require('./pathMemory')();
+var Canvas = require('canvas');
 
-var graph = require('./getSocialGraph')();
-//var graph = require('ngraph.fromdot')(fs.readFileSync('./data/twit/graph.dot', 'utf8'));
+//var graph = require('./getSocialGraph')();
+var graph = require('ngraph.fromdot')(fs.readFileSync('./data/twit/part.dot', 'utf8'));
 
-var DRAW_NODES = false;
+var DRAW_NODES = true;
 
 var MAP_THEME = {
   background: '#F0EDE5',
@@ -20,7 +20,8 @@ var MAP_THEME = {
 var BLUE_THEME = {
   background: '#0E2D5B',
   nodeColor: '#9fffff',
-  linkColor: '#78FFFF',
+  linkColor: 'rgba(120, 255, 255, 0.8)',
+  nodeBorder: '#78FFFF',
 }
 
 var textureVelocity;
@@ -31,31 +32,59 @@ var OUT_IMAGE_NAME = (new Date()).toISOString().replace(/:/g, '.');
 var textureName = path.join('out', 'routes' + OUT_IMAGE_NAME + '.png');
 var routeFileName = path.join('out', 'model_' + OUT_IMAGE_NAME + '.json');
 
+let gridAlignedCellSize = 20;
 var CELL_WIDTH = 1;
 var LAYOUT_ITERATIONS = 1500;
 var largestCost = 0;
 
-// readFieldFromImage('/Users/anvaka/projects/graph-to-vector-field/data/city2.png', (textureApi) => {
-//   textureVelocity = textureApi;
-//   start();
-// });
-start();
+assignSizeToNodes(graph);
+
+readFieldFromImage('/Users/anvaka/projects/graph-to-vector-field/data/city.png', (textureApi) => {
+  textureVelocity = textureApi;
+  start();
+});
+//start();
+
+function assignSizeToNodes(graph) {
+  var maxDegree = 0; // 
+  graph.forEachNode(node => {
+    if (!node.data) node.data = {};
+    if (!node.links) {
+      node.data.degree = 0;
+      return;
+    }
+
+    var degree = 0;
+    for (var i = 0; i < node.links.length; ++i) {
+      var link = node.links[i];
+      if (link.toId === node.id) degree += 1;
+    }
+    if (node.data.degree !== undefined) throw new Error('Data already has degree');
+    node.data.degree = degree;
+
+    if (degree > maxDegree) maxDegree = degree;
+  });
+
+  graph.forEachNode(node => {
+    node.data.size = node.data.degree/maxDegree;
+  })
+}
 
 // Main code:
 function start() {
   var layout = layoutGraph(graph);
-  var bounds = layout.getGraphRect();
+  var bounds = moveToPosition(graph, layout);
   var width = bounds.x2 - bounds.x1;
   var height = bounds.y2 - bounds.y1;
-  bounds.x1 -= width * .05
-  bounds.x2 += width * .05;
-  bounds.y1 -= height * .05;
-  bounds.y2 += height * .05;
-  width += width * 0.1;
-  height += height * 0.1;
+  bounds.x1 -=  30
+  bounds.x2 +=  30;
+  bounds.y1 -=  30;
+  bounds.y2 +=  30;
+  width += 60;
+  height += 60;
   console.log(bounds);
 
-  var scene = PImage.make(width, height);
+  var scene = new Canvas(width, height);
   var ctx = scene.getContext('2d');
 
   ctx.imageSmoothingEnabled = false;
@@ -96,7 +125,7 @@ function start() {
   var routeMap = routeEdges(layout, graph);
   fs.writeFileSync(routeFileName, JSON.stringify(routeMap), 'utf8');
 
-  PImage.encodePNGToStream(scene, fs.createWriteStream(textureName)).then(()=> {
+  savePng(scene, textureName) .then(()=> {
       console.log('Wrote out the png file to ' + textureName);
       console.log('Model file saved to ' + routeFileName);
   }).catch(e => {
@@ -104,7 +133,7 @@ function start() {
   });
 
   function drawVelocityHeatmap(graph) {
-    var scene = PImage.make(width, height);
+    var scene = new Canvas(width, height);
     var ctx = scene.getContext('2d');
 
     ctx.imageSmoothingEnabled = false;
@@ -118,15 +147,15 @@ function start() {
     });
 
     var textureName = path.join('out', 'velocity' + OUT_IMAGE_NAME + '.png');
-    PImage.encodePNGToStream(scene, fs.createWriteStream(textureName)).then(()=> {
-        console.log('Wrote heatmap png file to ' + textureName);
+    savePng(scene, textureName).then(()=> {
+      console.log('Wrote heatmap png file to ' + textureName);
     }).catch(e => {
-        console.log('there was an error writing', e);
+      console.log('there was an error writing', e);
     });
 
     function drawSegment(from, to, strength) {
       ctx.beginPath();
-      ctx.strokeStyle = `rgba(${Math.round(strength * 255)}, 0, 0, 1)`;
+      ctx.strokeStyle = `rgba(${Math.round(strength * 255)}, 0, 0, 0.61)`;
       ctx.moveTo(from.x, from.y)
       ctx.lineTo(to.x, to.y)
       ctx.stroke();
@@ -228,7 +257,7 @@ function start() {
       // }]);
 
       // Path is inverted, thus we put toId first, and fromId last:
-      pathMemory.rememberPath(npath, link.toId, link.fromId);
+      pathMemory.rememberPath(npath, graph.getNode(link.toId), graph.getNode(link.fromId));
     });
 
     return saveRoutes();
@@ -242,8 +271,7 @@ function start() {
       var to = v.toId.split(',').map(v => parseInt(v, 10));
       ctx.beginPath();
       ctx.strokeStyle = currentTheme.linkColor;
-      var lineWidth = Math.round(Math.pow(Math.round(4 * v.data/pathMemory.getMaxSeen()), 1.4)) + 1;
-      ctx.lineWidth = lineWidth;
+      var lineWidth = ctx.lineWidth = pathMemory.getEdgeWidth(v);
 
       ctx.moveTo(from[0] * CELL_WIDTH, from[1] * CELL_WIDTH);
       ctx.lineTo(to[0] * CELL_WIDTH, to[1] * CELL_WIDTH);
@@ -253,48 +281,45 @@ function start() {
 
     if (DRAW_NODES) {
       ctx.fillStyle = currentTheme.nodeColor;
+      ctx.strokeStyle = currentTheme.nodeColor;
       pathMemory.moveRootsOut();
       pathMemory.forEachRoot(root => {
         var pos = root.pos;
-        var rw = 8; var rh = 8;
-        var x = pos.x * CELL_WIDTH;
-        var y = pos.y * CELL_WIDTH;
-        var center = { x: x, y: y };
-        var a = 0; //pos.angle;
-        var leftTop = rotate({x: x - rw/2, y: y - rh/2 }, center, a);
-        var leftBottom = rotate({x: x - rw/2, y: y + rh/2}, center, a)
-        var topRight = rotate({x: x + rw/2,y: y - rh/2}, center, a);
-        var bottomRight = rotate({x: x + rw/2,y: y + rh/2}, center, a);
+        if (!pos) return;
+
+        var leftTop = pos.leftTop;
+        var leftBottom = pos.leftBottom;
+        var topRight = pos.topRight;
+        var bottomRight = pos.bottomRight;
+        ctx.lineWidth = 1;
 
         ctx.beginPath();
         ctx.moveTo(leftTop.x, leftTop.y);
         ctx.lineTo(topRight.x, topRight.y);
         ctx.lineTo(bottomRight.x, bottomRight.y);
         ctx.lineTo(leftBottom.x, leftBottom.y);
-        ctx.lineTo(leftTop.x, leftTop.y);
+        //ctx.lineTo(leftTop.x, leftTop.y);
 
-        ctx.stroke();
+        ctx.closePath();
+        ctx.fill();
+        //ctx.fillText(root.id, pos.center.x, pos.center.y)
+
       });
 
-      // graph.forEachNode(node => {
-      //   var pos = layout.getNodePosition(node.id);
-      //   var rw = 8; var rh = 8;
-      //   var x = pos.x - bounds.x1;
-      //   var y = pos.y - bounds.y1;
-      //   ctx.fillRect(x - rw/2, y - rh/2, rw, rh);
+      /*
+      graph.forEachNode(node => {
+        var pos = layout.getNodePosition(node.id);
+        var rw = 8; var rh = 8;
+        var x = pos.x - bounds.x1;
+        var y = pos.y - bounds.y1;
+        ctx.fillRect(x - rw/2, y - rh/2, rw, rh);
 
-      //   nodes.push({x: Math.round(x), y: Math.round(y)});
-      // });
+        nodes.push({x: Math.round(x), y: Math.round(y)});
+      });
+      */
     }
 
     return {nodes, edges}
-
-    function rotate(p, c, angle) {
-      return {
-        x: (p.x - c.x) * Math.cos(angle) - (p.y - c.y) * Math.sin(angle) + c.x,
-        y: (p.x - c.x) * Math.sin(angle) + (p.y - c.y) * Math.cos(angle) + c.y,
-      }
-    }
   }
 
   function drawPath(path) {
@@ -333,23 +358,23 @@ function start() {
     console.log('running layout...')
 
     var layout = require('ngraph.forcelayout')(graph, {
-      springLength : 35,
-      springCoeff : 0.00055,
-      dragCoeff : 0.09,
-      gravity : -1
+      springLength : 30,
+      springCoeff : 0.0008,
+      dragCoeff : 0.02,
+      gravity : -1.2
     });
 
     for(var i = 0; i < LAYOUT_ITERATIONS; ++i) layout.step();
 
-    var adjustStep = 6;
+    // var adjustStep = 6;
 
-    graph.forEachNode(node => {
-      var pos = layout.getNodePosition(node.id);
-      layout.setNodePosition(node.id, 
-        Math.floor(pos.x / adjustStep) * adjustStep,
-        Math.floor(pos.y / adjustStep) * adjustStep
-      );
-    })
+    // graph.forEachNode(node => {
+    //   var pos = layout.getNodePosition(node.id);
+    //   layout.setNodePosition(node.id, 
+    //     Math.floor(pos.x / adjustStep) * adjustStep,
+    //     Math.floor(pos.y / adjustStep) * adjustStep
+    //   );
+    // })
     return layout;
   }
 
@@ -370,10 +395,17 @@ function start() {
       return textureVelocity.get(dx, dy);
     }
     //return {x: -y, y: x};
+    var l = Math.sqrt()
+    return {
+      x: field(x, y, 1),
+      y: field(x, y, 1)
+    }
 
     var v = getNearestNodeDistance(x, y, layout);
 
-    // for (var i = 0; i < 40; ++i) {
+    // var v = 0;
+
+    // for (var i = 0; i < 10; ++i) {
     //   var sn = sortedNodesByDegree[i];
     //   var pos = layout.getNodePosition(sn.id);
     //   v += field(x - pos.x, y - pos.y, sn.linksCount);
@@ -392,4 +424,58 @@ function start() {
 
     return minL;
   }
+}
+
+function moveToPosition(graph, layout) {
+  let seenPos = new Set();
+
+  var bounds = {
+    x1: Number.POSITIVE_INFINITY,
+    y1: Number.POSITIVE_INFINITY,
+    x2: Number.NEGATIVE_INFINITY,
+    y2: Number.NEGATIVE_INFINITY
+  };
+
+  graph.forEachNode(node => {
+    let pos = layout.getNodePosition(node.id);
+    let nodeSize = gridAlignedCellSize / 2;
+    let x = gridAlignedCellSize * Math.round((pos.x - nodeSize) / gridAlignedCellSize);
+    let y = gridAlignedCellSize * Math.round((pos.y - nodeSize) / gridAlignedCellSize);
+    let key = x + ';' + y;
+    let t = 1;
+    // Move out if it is already occupied
+    while (seenPos.has(key)) {
+      let sx = Math.random() < 0.5 ? 1 : -1;
+      let sy = Math.random() < 0.5 ? 1 : -1;
+      x = gridAlignedCellSize * (Math.round((pos.x - nodeSize) / gridAlignedCellSize) + sx * t);
+      y = gridAlignedCellSize * (Math.round((pos.y - nodeSize) / gridAlignedCellSize) + sy * t);
+      key = x + ';' + y;
+      t += 1;
+    }
+
+    seenPos.add(key);
+    pos.x = x + nodeSize;
+    pos.y = y + nodeSize;
+    
+    updateBounds(pos.x, pos.y);
+  })
+
+  return bounds;
+
+  function updateBounds(x, y) {
+    if (x < bounds.x1) bounds.x1 = x;
+    if (x > bounds.x2) bounds.x2 = x;
+    if (y < bounds.y1) bounds.y1 = y;
+    if (y > bounds.y2) bounds.y2 = y;
+  }
+}
+
+function savePng(canvas, outFileName) {
+  return new Promise((resolve, reject) => {
+    var out = fs.createWriteStream(outFileName);
+    var stream = canvas.pngStream();
+    stream.on('data', function(chunk){ out.write(chunk); });
+    stream.on('finish', resolve);
+    stream.on('error', reject);
+  });
 }

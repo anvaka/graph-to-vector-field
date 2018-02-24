@@ -1,5 +1,6 @@
 var createGraph = require('ngraph.graph');
 var simplifyPointsPath = require('./simplify');
+var createBlockPlacement = require('./blockPlacement');
 
 module.exports = createPathMemory;
 
@@ -15,50 +16,57 @@ function createPathMemory() {
     moveRootsOut,
     forEachRoot,
     forEachEdge,
-    getMaxSeen() {
-      return maxSeenValue;
-    }
+    getEdgeWidth: getEdgeWidth
   }
 
   function moveRootsOut() {
-    forEachRoot(root => {
-      var normals = getNormalsForRoot(root.internalId);
-      // we should pick them smarter here, based on available space.
-      // For now - it's just a test.
-      var n = normals[0];
-      root.pos = {
-        x: n.px,
-        y: n.py,
-        x: n.x * 5 + n.px,
-        y: n.y * 5 + n.py,
-        // angle: n.angle
+    var edges = [];
+    var snapLength = 32;
+
+    pathGraph.forEachLink(link => {
+      var xy1 = getXY(link.fromId);
+      var xy2 = getXY(link.toId);
+      var dx = (xy2[0] - xy1[0]);
+      var dy = (xy2[1] - xy1[1]);
+      var l = Math.sqrt(dx * dx + dy * dy);
+      var parts = Math.ceil(l/snapLength)
+      var minX = xy1[0], minY = xy1[1];
+      var maxX = xy2[0], maxY = xy2[1];
+
+      while (parts > 0) {
+        var maxX = dx < 0 ? 
+                    Math.max(minX + snapLength * dx/l, xy2[0]) :
+                    Math.min(minX + snapLength * dx/l, xy2[0]);
+        var maxY = dy < 0 ? 
+                    Math.max(minY + snapLength * dy / l, xy2[1]) :
+                    Math.min(minY + snapLength * dy / l, xy2[1]);
+
+        var l0 = Math.sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY));
+        edges.push({
+          minX: Math.min(minX, maxX),
+          minY: Math.min(minY, maxY),
+          maxX: Math.max(maxX, minX),
+          maxY: Math.max(maxY, minY),
+          line: { 
+            length: l0, 
+            minX, minY, maxX, maxY,
+            width: getEdgeWidth(link) 
+          }
+        });
+        minX = maxX; minY = maxY;
+        parts -= 1;
       }
     });
-  }
 
-  function getNormalsForRoot(nodeId) {
-    var normals = [];
-    var node = pathGraph.getNode(nodeId);
-    forEachPathFrom(node, (path) => {
-      var from = path[0];
-      var to = path[1];
-      var dx = from.x - to.x;
-      var dy = from.y - to.y;
-      var l = Math.sqrt(dx * dx + dy * dy);
-      if (l === 0) throw new Error('How come this is null?');
-      var nx = dx/l;
-      var ny = dy/l;
-      normals.push({
-        x: -ny,
-        y: nx,
-        angle: Math.atan2(ny, nx),
-        // todo: verify that it's always nodeId, and not the other end.
-        px: from.x,
-        py: from.y
-      })
+    var placement = createBlockPlacement(edges);
+    var rootSortedBySize = [];
+    // TODO: Sort by size.
+    forEachRoot(root => { rootSortedBySize.push(root); });
+    rootSortedBySize.sort((a, b) => b.size - a.size);
+    rootSortedBySize.forEach(root => {
+      var pos = getXY(root.internalId);
+      placement.place(root, pos);
     });
-
-    return normals;
   }
 
   function forEachRoot(callback) {
@@ -138,7 +146,7 @@ function createPathMemory() {
         forEachPathFrom(node, path => {
           if (path.length < 3) return;
 
-          var simplifiedPath = simplifyPointsPath(path, 0.5, true);
+          var simplifiedPath = simplifyPointsPath(path, 3, true);
           var prev = path[0];
           var removedWeight = 0;
           var removed = 0;
@@ -195,67 +203,19 @@ function createPathMemory() {
     //console.log(lengths.filter(x => x > 1));
   }
 
-  function canRemove(edge1, edge2) {
-    // TODO: This should probably be moved out of here.
-    // The idea here, is that we don't want to remove edges that point to different
-    // directions.
-    var angle1 = getAngle(edge1.fromId, edge1.toId);
-    var angle2 = getAngle(edge2.fromId, edge2.toId);
-
-    return Math.abs(angle1 - angle2) < 0.001;
-  }
-
-  function getAngle(a, b) {
-    var xy1 = getXY(a);
-    var xy2 = getXY(b);
-    if (xy1.length !== 2 || xy2.length !== 2) throw new Error('Invalid edge key: ' + a + ',' + b);
-
-    return Math.atan2(xy2[0] - xy1[0], xy2[1] - xy2[1]);
-  }
-
   function getXY(a) {
     return a.split(',').map(v => Number.parseFloat(v));
   }
 
-  function getMergedLink(edge1, edge2) {
-    var data = (edge1.data + edge2.data)/2;
-    var fromId, toId;
-    // we remove shared part:
-    if (edge1.toId == edge2.fromId) {
-      fromId = edge1.fromId;
-      toId = edge2.toId;
-    } else if (edge1.fromId === edge2.toId) {
-      fromId = edge1.toId;
-      toId = edge2.fromId;
-    } else if (edge1.fromId === edge2.fromId) {
-      fromId = edge1.toId;
-      toId = edge2.toId;
-    } else if (edge2.toId === edge1.toId) {
-      fromId = edge2.fromId;
-      toId = edge1.fromId;
-    } else {
-      throw new Error('No shared part between edges.')
-    }
-    // make sure we order edges according to our rules:
-
-    if(fromId >= toId) {
-      var t = fromId;
-      fromId = toId;
-      toId = t;
-    }
-    return {
-      fromId: fromId,
-      toId: toId,
-      data: data
-    }
+  function getEdgeWidth(edge) {
+    return Math.round(Math.pow(Math.round(4 * edge.data/maxSeenValue), 1.4)) + 1;
   }
 
   function forEachEdge(cb) {
     pathGraph.forEachLink(cb);
-    //seenCount.forEach(cb);
   }
 
-  function rememberPath(path, startId, endId) {
+  function rememberPath(path, startNode, endNode) {
     if (path.length < 1) throw new Error('Empty path?');
 
     var from = path[0];
@@ -267,17 +227,19 @@ function createPathMemory() {
 
     // Remember bound nodes.
     var node = pathGraph.getNode(path[0].id);
-    node.data = { node: startId }
+    node.data = { node: startNode.id }
     roots.set(node.id, {
       internalId: node.id,
-      id: startId
+      id: startNode.id,
+      size: startNode.data.size
     });
 
     node = pathGraph.getNode(path[path.length - 1].id);
-    node.data = { node: endId }
+    node.data = { node: endNode.id }
     roots.set(node.id, {
       internalId: node.id,
-      id: endId
+      id: endNode.id,
+      size: endNode.data.size
     });
   }
 
