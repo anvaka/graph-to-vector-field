@@ -1,6 +1,7 @@
 var createGraph = require('ngraph.graph');
 var simplifyPointsPath = require('./simplify');
 var createBlockPlacement = require('./blockPlacement');
+var getXY = require('./getXY');
 
 module.exports = createPathMemory;
 
@@ -16,7 +17,12 @@ function createPathMemory() {
     moveRootsOut,
     forEachRoot,
     forEachEdge,
+    getGraph: getGraph,
     getEdgeWidth: getEdgeWidth
+  }
+
+  function getGraph() {
+    return pathGraph;
   }
 
   function moveRootsOut() {
@@ -34,6 +40,7 @@ function createPathMemory() {
       var maxX = xy2[0], maxY = xy2[1];
 
       while (parts > 0) {
+        // this will split long lines into smaller lines.
         var maxX = dx < 0 ? 
                     Math.max(minX + snapLength * dx/l, xy2[0]) :
                     Math.min(minX + snapLength * dx/l, xy2[0]);
@@ -42,11 +49,16 @@ function createPathMemory() {
                     Math.min(minY + snapLength * dy / l, xy2[1]);
 
         var l0 = Math.sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY));
+        var rbbox = rotatedBBox({
+          minX, minY, maxX, maxY,
+          w: getEdgeWidth(link)
+        });
+
         edges.push({
-          minX: Math.min(minX, maxX),
-          minY: Math.min(minY, maxY),
-          maxX: Math.max(maxX, minX),
-          maxY: Math.max(maxY, minY),
+          minX: rbbox.minX, //Math.min(minX, maxX),
+          minY: rbbox.minY, //Math.min(minY, maxY),
+          maxX: rbbox.maxX, //Math.max(maxX, minX),
+          maxY: rbbox.maxY, //Math.max(maxY, minY),
           line: { 
             length: l0, 
             minX, minY, maxX, maxY,
@@ -203,10 +215,6 @@ function createPathMemory() {
     //console.log(lengths.filter(x => x > 1));
   }
 
-  function getXY(a) {
-    return a.split(',').map(v => Number.parseFloat(v));
-  }
-
   function getEdgeWidth(edge) {
     return Math.round(Math.pow(Math.round(4 * edge.data/maxSeenValue), 1.4)) + 1;
   }
@@ -217,6 +225,10 @@ function createPathMemory() {
 
   function rememberPath(path, startNode, endNode) {
     if (path.length < 1) throw new Error('Empty path?');
+    if (path.length === 1) {
+      console.warn('Cycles are not supported yet', startNode.id);
+      return;
+    }
 
     var from = path[0];
     for (var i = 1; i < path.length; ++i) {
@@ -273,8 +285,58 @@ function createPathMemory() {
   function getTo(from, to) {
     return from.id < to.id ? to.id : from.id;
   }
+}
 
-  function getEdgeKey(from, to) {
-    return from.id < to.id ? from.id + ';' + to.id : to.id + ';' + from.id;
+function rotatedBBox(params) {
+  var dx = params.maxX - params.minX;
+  var dy = params.maxY - params.minY;
+  var w2 = params.w/2;
+  var l = Math.sqrt(dx * dx + dy * dy);
+  var minX = Number.POSITIVE_INFINITY; var minY = Number.POSITIVE_INFINITY;
+  var maxX = Number.NEGATIVE_INFINITY; var maxY = Number.NEGATIVE_INFINITY;
+  if (l === 0) {
+    // a dot?
+    minX = params.minX - w2;
+    maxX = params.maxX + w2;
+    minY = params.minY - w2;
+    maxY = params.maxY + w2;
+  } else if (dx === 0) {
+    // parallel to Y
+    minX = params.minX - w2;
+    maxX = params.maxX + w2;
+    minY = params.minY;
+    maxY = params.maxY;
+  } else {
+    // regular rectangle
+    var points = [];
+
+    var nx = -dy/l; var ny = dx/l;
+    points.push({
+      x: params.minX + nx * w2,
+      y: params.minY + ny * w2,
+    }, {
+      x: params.minX - nx * w2,
+      y: params.minY - ny * w2,
+    }, {
+      x: params.maxX + nx * w2,
+      y: params.maxY + ny * w2,
+    }, {
+      x: params.maxX - nx * w2,
+      y: params.maxY - ny * w2,
+    });
+    for (var i = 0; i < points.length; ++i) {
+      var p = points[i];
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+
+  return {
+    minX: Math.min(minX, maxX),
+    minY: Math.min(minY, maxY),
+    maxX: Math.max(maxX, minX),
+    maxY: Math.max(maxY, minY),
   }
 }

@@ -3,7 +3,6 @@ var rbush = require('rbush');
 module.exports = createBlockPlacement;
 
 var searchRadius = 20;
-var blockRadius = 3;
 
 function createBlockPlacement(edges) {
   var tree = rbush();
@@ -26,7 +25,7 @@ function createBlockPlacement(edges) {
       });
       var candidate = occupyBestCandidate(snapCandidates, node, pos, 1./reducer)
       if (!candidate) {
-        // mul += 1;
+        mul += 1;
         reducer += 1;
         console.error('Increase radius? Cannot snap ', pos)
       }
@@ -58,9 +57,9 @@ function createBlockPlacement(edges) {
 
       if (line.isBlock) continue; // we are intersecting a building. Clearly cannot place here
       if (line.left && line.right) continue; // Both sides are taken already.
-      if (line.length < blockRadius*2) continue; // too small
+      //if (line.length < blockRadius*2) continue; // too small
 
-      var radius = blockRadius * rReducer + (4 * root.size);
+      var radius = root.size * rReducer/2;
 
       var l = line.length;
       var tx = (line.maxX - line.minX)/l;
@@ -68,7 +67,7 @@ function createBlockPlacement(edges) {
       var offset = Math.random() - 0.5;
       var mx = (line.minX + line.maxX)/2 + tx * offset * l * 0.4;
       var my = (line.minY + line.maxY)/2 + ty * offset * l * 0.4;
-      var nx = -ty * (blockRadius + 2 + line.width), ny = tx * (blockRadius + 2 + line.width);
+      var nx = -ty * (root.size/2 + 2 + line.width), ny = tx * (root.size/2 + 2 + line.width);
       var angle = Math.atan2(ty, tx);
       var x, y;
       var side;
@@ -98,7 +97,7 @@ function createBlockPlacement(edges) {
         }
 
         if (intersectSomething(candidate)) {
-          line[side] = { taken: true }
+          //line[side] = { taken: true }
         } else {
           line[side] = candidate;
           root.pos = line[side];

@@ -1,14 +1,16 @@
-//var graph = require('miserables');
-//var graph = require('ngraph.generators').grid(4, 8);
+var graph = require('miserables');
+//var graph = require('ngraph.generators').grid(4, 3);
 var readFieldFromImage = require('./readFieldFromImage');
 var fs = require('fs');
 var path = require('path');
 var createGraph = require('ngraph.graph');
 var pathMemory = require('./pathMemory')();
 var Canvas = require('canvas');
+var saveSvg = require('./saveSvg');
 
 //var graph = require('./getSocialGraph')();
-var graph = require('ngraph.fromdot')(fs.readFileSync('./data/twit/part.dot', 'utf8'));
+//var graph = require('ngraph.fromdot')(fs.readFileSync('./data/twit/part.dot', 'utf8'));
+//var graph = require('ngraph.fromdot')(fs.readFileSync('./data/reddit.dot', 'utf8'));
 
 var DRAW_NODES = true;
 
@@ -31,6 +33,7 @@ var OUT_IMAGE_NAME = (new Date()).toISOString().replace(/:/g, '.');
 
 var textureName = path.join('out', 'routes' + OUT_IMAGE_NAME + '.png');
 var routeFileName = path.join('out', 'model_' + OUT_IMAGE_NAME + '.json');
+var svgFileName = path.join('out', 'svg_' + OUT_IMAGE_NAME + '.svg');
 
 let gridAlignedCellSize = 20;
 var CELL_WIDTH = 1;
@@ -39,14 +42,16 @@ var largestCost = 0;
 
 assignSizeToNodes(graph);
 
-readFieldFromImage('/Users/anvaka/projects/graph-to-vector-field/data/city.png', (textureApi) => {
-  textureVelocity = textureApi;
-  start();
-});
-//start();
+// readFieldFromImage('/Users/anvaka/projects/graph-to-vector-field/data/city.png', (textureApi) => {
+//   textureVelocity = textureApi;
+//   start();
+// });
+start();
 
 function assignSizeToNodes(graph) {
   var maxDegree = 0; // 
+  var minDegree = Number.POSITIVE_INFINITY;
+  var nodeScore = Object.create(null);
   graph.forEachNode(node => {
     if (!node.data) node.data = {};
     if (!node.links) {
@@ -63,11 +68,17 @@ function assignSizeToNodes(graph) {
     node.data.degree = degree;
 
     if (degree > maxDegree) maxDegree = degree;
+    if (degree < minDegree) minDegree = degree;
   });
 
   graph.forEachNode(node => {
-    node.data.size = node.data.degree/maxDegree;
+    node.data.size = getBucket(node.data.degree, minDegree, maxDegree, 4) + 6;
   })
+
+  function getBucket(value, min, max, bucketsCount) {
+    let slice = (value - min) / (max - min);
+    return Math.round(slice * bucketsCount);
+  }
 }
 
 // Main code:
@@ -266,6 +277,7 @@ function start() {
   function saveRoutes() {
     var edges = [], nodes = [];
     pathMemory.simplify();
+
     pathMemory.forEachEdge(v => {
       var from = v.fromId.split(',').map(v => parseInt(v, 10));
       var to = v.toId.split(',').map(v => parseInt(v, 10));
@@ -291,7 +303,7 @@ function start() {
         var leftBottom = pos.leftBottom;
         var topRight = pos.topRight;
         var bottomRight = pos.bottomRight;
-        ctx.lineWidth = 1;
+        // ctx.lineWidth = 1;
 
         ctx.beginPath();
         ctx.moveTo(leftTop.x, leftTop.y);
@@ -300,10 +312,10 @@ function start() {
         ctx.lineTo(leftBottom.x, leftBottom.y);
         //ctx.lineTo(leftTop.x, leftTop.y);
 
-        ctx.closePath();
+        ctx.stroke();
+        //ctx.closePath();
         ctx.fill();
         //ctx.fillText(root.id, pos.center.x, pos.center.y)
-
       });
 
       /*
@@ -319,7 +331,11 @@ function start() {
       */
     }
 
-    return {nodes, edges}
+    var svg = saveSvg(pathMemory);
+    fs.writeFileSync(svgFileName, `<svg viewBox="0 0 ${width} ${height}"><g id="scene">
+${svg}
+</g></svg>`);
+    return {nodes, edges }
   }
 
   function drawPath(path) {
@@ -395,11 +411,11 @@ function start() {
       return textureVelocity.get(dx, dy);
     }
     //return {x: -y, y: x};
-    var l = Math.sqrt()
-    return {
-      x: field(x, y, 1),
-      y: field(x, y, 1)
-    }
+    // var l = Math.sqrt()
+    // return {
+    //   x: field(x, y, 1),
+    //   y: field(x, y, 1)
+    // }
 
     var v = getNearestNodeDistance(x, y, layout);
 
