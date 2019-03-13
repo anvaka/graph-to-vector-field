@@ -126,7 +126,7 @@ function saveLayoutToVectorFieldTexture(layout) {
   }
 
   // Now it's time to go over every single pixel and build a matrix of
-  // velocities. I don['t really care about performance here, as this is
+  // velocities. I don't really care about performance here, as this is
   // just an experiment.
   console.log('Collecting velocities...')
   var velocities = accumulateVelocities(rect, layout);
